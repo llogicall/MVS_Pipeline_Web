@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Environment
+.env
+.venv
+venv/
+env/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project
+.secret_key
+data/
+.claude/
+.codex/
+*.log
+runs/
+uploads/
+wandb/
+
+# MVS checkpoints (user-provided, not tracked)
+MVS/*/checkpoints/*
+!MVS/*/checkpoints/.gitkeep
+
+# Tests
+.coverage
+htmlcov/
+.pytest_cache/

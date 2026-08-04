@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MVS Pipeline Web 服务</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <!-- 登录遮罩层 -->
+    <div id="login_overlay" class="login-overlay">
+        <div class="login-card">
+            <h2>MVS Pipeline</h2>
+            <p class="login-subtitle">Multi-View Stereo Web 服务</p>
+            <div class="login-form">
+                <input type="text" id="login_username" placeholder="用户名" class="login-input">
+                <input type="password" id="login_password" placeholder="密码" class="login-input">
+                <div class="login-error" id="login_error"></div>
+                <button class="login-btn" id="login_btn">登 录</button>
+                <button class="login-btn login-btn-secondary" id="register_btn">注册新账号</button>
+            </div>
+            <p class="login-hint" id="login_hint"></p>
+        </div>
+    </div>
+
+    <div class="app-container" id="app_container" style="display:none">
+        <header>
+            <div class="header-left">
+                <h1>MVS Pipeline</h1>
+                <span class="subtitle">Multi-View Stereo Web 服务</span>
+            </div>
+            <div class="header-center" id="project_area" style="display:none">
+                <select id="project_selector" class="project-select">
+                    <option value="">-- 选择项目 --</option>
+                </select>
+                <button class="btn btn-sm" id="new_project_btn">+ 新建</button>
+                <button class="btn btn-sm btn-danger" id="delete_project_btn" disabled>删除</button>
+            </div>
+            <div class="header-right" id="auth_area" style="display:none">
+                <div id="auth_logged_in">
+                    <span id="auth_username_display" class="auth-username"></span>
+                    <button class="auth-logout-btn" id="logout_btn">退出登录</button>
+                </div>
+            </div>
+            <!-- 主题切换器 -->
+            <div class="theme-switcher">
+                <button class="theme-btn theme-btn-dark active" data-theme="dark" title="深色主题"></button>
+                <button class="theme-btn theme-btn-white" data-theme="white" title="白色主题"></button>
+                <button class="theme-btn theme-btn-yellow" data-theme="yellow" title="黄色主题"></button>
+                <button class="theme-btn theme-btn-green" data-theme="green" title="绿色主题"></button>
+            </div>
+        </header>
+
+        <div class="main-layout">
+                <!-- 标签导航（纵向排列在最左边） -->
+                <div class="tab-nav">
+                    <button class="tab-btn active" data-tab="colmap">COLMAP</button>
+                    <button class="tab-btn" data-tab="mvs">MVS</button>
+                    <button class="tab-btn" data-tab="pointcloud">点云</button>
+                </div>
+
+                <aside class="sidebar">
+                    <!-- 可滚动的内容区 -->
+                    <div class="tab-scroll">
+                        <!-- ===== COLMAP 标签 ===== -->
+                        <div class="tab-content active" id="tab_colmap">
+                        <section class="panel">
+                            <h3>项目设置</h3>
+                            <div class="form-group">
+                                <label>工作目录</label>
+                                <input type="text" id="colmap_workspace_dir" value="runs" placeholder="例如 runs">
+                            </div>
+                            <div class="form-group">
+                                <label>图像目录路径</label>
+                                <div class="input-row">
+                                    <input type="text" id="image_dir" placeholder="服务器本机路径">
+                                    <button class="btn btn-sm" id="browse_images_btn">浏览</button>
+                                </div>
+                            </div>
+                            <div class="form-group" id="upload_group">
+                                <label>上传图像</label>
+                                <input type="file" id="image_upload" webkitdirectory multiple>
+                            </div>
+                            <!-- 图像缩略图（紧凑型） -->
+                            <div id="image_gallery" class="sidebar-gallery" style="display:none">
+                                <div class="sidebar-gallery-scroll" id="gallery_scroll">
+                                    <!-- 缩略图将动态插入 -->
+                                </div>
+                            </div>
+                            <!-- 视频上传与帧提取 -->
+                            <div class="form-group">
+                                <label>上传视频</label>
+                                <input type="file" id="video_upload" accept=".mp4,.avi,.mov,.mkv,.webm,.flv">
+                            </div>
+                            <div id="video_settings" style="display:none">
+                                <div class="form-group">
+                                    <label>每秒帧数 (fps)</label>
+                                    <input type="number" id="video_fps" value="1" min="0.1" max="30" step="0.1">
+                                </div>
+                                <div class="form-group">
+                                    <label>最大帧数</label>
+                                    <input type="number" id="video_max_frames" value="200" min="1" max="5000" step="1">
+                                </div>
+                                <button class="btn btn-secondary full-width" id="extract_frames_btn">提取帧</button>
+                            </div>
+                            <!-- 相机采集 -->
+                            <div class="form-group">
+                                <label>相机采集</label>
+                                <div class="action-row">
+                                    <button class="btn btn-secondary" id="camera_open_btn">打开相机</button>
+                                    <button class="btn btn-secondary" id="camera_start_btn" disabled>开始采集</button>
+                                    <button class="btn btn-secondary" id="camera_stop_btn" disabled>停止采集</button>
+                                </div>
+                            </div>
+                            <div id="camera_preview_container" style="display:none">
+                                <video id="camera_preview" autoplay playsinline></video>
+                                <div class="form-group">
+                                    <label>采集间隔 (秒)</label>
+                                    <input type="number" id="camera_interval" value="1" min="0.1" max="60" step="0.1">
+                                </div>
+                                <span id="camera_status" class="upload-status">就绪</span>
+                            </div>
+                        </section>
+
+                    <section class="panel">
+                        <h3>SfM 参数</h3>
+                        <div class="form-group">
+                            <label>相机模型</label>
+                            <select id="camera_model">
+                                <option value="SIMPLE_RADIAL">SIMPLE_RADIAL</option>
+                                <option value="SIMPLE_PINHOLE">SIMPLE_PINHOLE</option>
+                                <option value="PINHOLE">PINHOLE</option>
+                                <option value="RADIAL">RADIAL</option>
+                                <option value="OPENCV">OPENCV</option>
+                                <option value="FULL_OPENCV">FULL_OPENCV</option>
+                            </select>
+                        </div>
+                        <div class="param-grid">
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="single_camera" checked>
+                                    单相机模式
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="use_gpu" checked>
+                                    使用 GPU
+                                </label>
+                            </div>
+                        </div>
+                        <div class="param-grid">
+                            <div class="form-group">
+                                <label>最大图像尺寸</label>
+                                <input type="number" id="sfm_max_image_size" value="800">
+                            </div>
+                            <div class="form-group">
+                                <label>最大特征数</label>
+                                <input type="number" id="sfm_max_num_features" value="4096">
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="panel actions-panel">
+                        <button class="btn btn-primary full-width" data-action="pose">运行位姿估计（完整流程）</button>
+                        <div class="action-row">
+                            <button class="btn btn-secondary" data-action="feature_extract">特征提取</button>
+                            <button class="btn btn-secondary" data-action="feature_match">图像匹配</button>
+                            <button class="btn btn-secondary" data-action="incremental_mapping">位姿估计</button>
+                        </div>
+                        <div class="action-row">
+                            <button class="btn btn-secondary" id="show_cameras_btn" disabled>相机位姿</button>
+                            <button class="btn btn-secondary" id="show_sparse_btn" disabled>稀疏点云</button>
+                        </div>
+                        <button class="btn btn-danger full-width" id="cancel_task_btn" disabled>取消任务</button>
+                    </section>
+                </div>
+
+                <!-- ===== MVS 标签 ===== -->
+                <div class="tab-content" id="tab_mvs">
+                    <section class="panel">
+                        <h3>项目设置</h3>
+                        <div class="form-group">
+                            <label>工作目录</label>
+                            <input type="text" id="mvs_workspace_dir" value="runs" placeholder="例如 runs">
+                        </div>
+                        <div class="form-group">
+                            <label>MVS 方法目录</label>
+                            <select id="mvs_root">
+                                <option value="">-- 选择 MVS 方法 --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>模型 checkpoint</label>
+                            <select id="checkpoint">
+                                <option value="">-- 先选择 MVS 方法 --</option>
+                            </select>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <h3>深度估计参数</h3>
+                        <div class="param-grid">
+                            <div class="form-group">
+                                <label>interval_scale</label>
+                                <input type="number" id="interval_scale" value="1.06" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label>num_view</label>
+                                <input type="number" id="num_view" value="5" min="2" max="20">
+                            </div>
+                            <div class="form-group">
+                                <label>max_h</label>
+                                <input type="number" id="max_h" value="864">
+                            </div>
+                            <div class="form-group">
+                                <label>max_w</label>
+                                <input type="number" id="max_w" value="1152">
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="panel actions-panel">
+                        <div class="action-row">
+                            <button class="btn btn-secondary" data-action="convert">格式转换</button>
+                            <button class="btn btn-secondary" data-action="depth">深度估计</button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ===== 点云处理标签 ===== -->
+                <div class="tab-content" id="tab_pointcloud">
+                    <section class="panel pointcloud-source-panel">
+                        <div class="panel-header">
+                            <h3>点云数据来源</h3>
+                            <button class="btn btn-sm" id="refresh_depth_btn" title="刷新深度估计结果">刷新</button>
+                        </div>
+                        <div class="form-group">
+                            <label for="depth_source">深度估计结果</label>
+                            <select id="depth_source">
+                                <option value="">-- 选择深度估计结果 --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="pointcloud_input">输入点云</label>
+                            <select id="pointcloud_input" disabled>
+                                <option value="">-- 暂无可用点云 --</option>
+                            </select>
+                        </div>
+                        <div class="pointcloud-task-list" id="pointcloud_tasks" aria-live="polite"></div>
+                    </section>
+
+                    <section class="panel">
+                        <h3>点云融合参数</h3>
+                        <div class="param-grid">
+                            <div class="form-group">
+                                <label>置信度阈值</label>
+                                <input type="number" id="conf" value="0.9" min="0" max="1" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label>thres_view</label>
+                                <input type="number" id="thres_view" value="5" min="1" max="20">
+                            </div>
+                            <div class="form-group">
+                                <label>num_worker</label>
+                                <input type="number" id="num_worker" value="4" min="1" max="16">
+                            </div>
+                            <div class="form-group">
+                                <label>融合方法</label>
+                                <select id="filter_method">
+                                    <option value="normal">normal</option>
+                                    <option value="gipuma">gipuma</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary full-width" id="btn_deep_fusion">点云融合</button>
+                    </section>
+
+                    <section class="panel">
+                        <h3>体素下采样</h3>
+                        <div class="param-grid">
+                            <div class="form-group">
+                                <label>voxel_size</label>
+                                <input type="number" id="voxel_size" value="0.01" min="0.0001" step="0.001">
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary full-width" id="btn_voxel_downsample">体素下采样</button>
+                    </section>
+
+                    <section class="panel">
+                        <h3>统计滤波</h3>
+                        <div class="param-grid">
+                            <div class="form-group">
+                                <label>nb_neighbors</label>
+                                <input type="number" id="stat_nb_neighbors" value="20" min="1" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label>std_ratio</label>
+                                <input type="number" id="stat_std_ratio" value="2.0" min="0.1" step="0.1">
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary full-width" id="btn_stat_filter">统计滤波</button>
+                    </section>
+
+                    <section class="panel">
+                        <h3>半径滤波</h3>
+                        <div class="param-grid">
+                            <div class="form-group">
+                                <label>nb_points</label>
+                                <input type="number" id="radius_nb_points" value="16" min="1" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label>radius</label>
+                                <input type="number" id="radius_value" value="0.05" min="0.0001" step="0.001">
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary full-width" id="btn_radius_filter">半径滤波</button>
+                    </section>
+
+                    <section class="panel">
+                        <h3>曲面重建（Open3D）</h3>
+                        <div class="action-row">
+                            <button class="btn btn-secondary" id="btn_surface_recon" disabled>曲面重建</button>
+                        </div>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">* 曲面重建开发中</p>
+                    </section>
+                </div>
+            </div>
+            </aside>
+
+            <main class="content">
+                <section class="panel result-panel">
+                    <div class="panel-header">
+                        <h3>场景预览</h3>
+                        <div class="header-actions">
+                            <span id="ply_info" class="ply-info">无数据</span>
+                            <button class="btn btn-sm" id="toggle_cameras_btn" disabled>相机位姿</button>
+                            <button class="btn btn-sm" id="download_ply_btn" disabled>下载 PLY</button>
+                        </div>
+                    </div>
+                    <!-- 3D 可视化区域 -->
+                    <div id="three_container" class="three-container">
+                        <div class="three-placeholder">上传图像或运行管道后将在此显示预览</div>
+                    </div>
+                </section>
+
+                <section class="panel log-panel">
+                    <div class="panel-header">
+                        <h3>运行日志</h3>
+                        <div class="header-actions">
+                            <span id="task_status_badge" class="status-badge idle">就绪</span>
+                            <button class="btn btn-sm" id="clear_logs_btn">清空</button>
+                        </div>
+                    </div>
+                    <!-- 进度条 -->
+                    <div class="progress-bar-container" id="progress_bar_container">
+                        <div class="progress-bar-track">
+                            <div class="progress-bar-fill" id="progress_bar_fill"></div>
+                        </div>
+                        <div class="progress-stages" id="progress_stages">
+                            <div class="progress-stage" data-stage="0">上传图像</div>
+                            <div class="progress-stage" data-stage="1">特征提取</div>
+                            <div class="progress-stage" data-stage="2">图像匹配</div>
+                            <div class="progress-stage" data-stage="3">位姿估计</div>
+                            <div class="progress-stage" data-stage="4">位姿转化</div>
+                            <div class="progress-stage" data-stage="5">深度估计</div>
+                            <div class="progress-stage" data-stage="6">点云融合</div>
+                        </div>
+                    </div>
+                    <pre id="log_output" class="log-output">等待执行...</pre>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+    <script src="js/three-viewer.js"></script>
+</body>
+</html>
